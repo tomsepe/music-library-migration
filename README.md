@@ -20,8 +20,16 @@ This script fixes that by converting the paths automatically.
 
 ## What It Does
 
+### Two-Tool Workflow:
+
+**Tool 1: `extract_playlists_from_xml.py`** (Optional - if no iTunes access)
+- Extracts playlists directly from `iTunes Library.xml`
+- Generates individual `.m3u` files for each playlist
+- Preserves track metadata and ordering
+- Great for batch extraction or when iTunes isn't available
+
+**Tool 2: `playlist_fixer.py`** (Main converter)
 - **Interactive terminal-based workflow** - no manual configuration needed
-- Reads iTunes-exported `.m3u` and `.m3u8` playlist files
 - Auto-detects Windows path prefixes from your playlists
 - Converts Windows backslashes (`\`) to Linux forward slashes (`/`)
 - Replaces Windows path prefixes with Linux/Docker paths or relative paths
@@ -35,19 +43,136 @@ This script fixes that by converting the paths automatically.
 ## Prerequisites
 
 - Python 3.x installed on your system (no external dependencies needed)
-- iTunes playlists exported as `.m3u` files
+- iTunes library with playlists you want to migrate
 - Navidrome music server (typically running in Docker)
+
+## Understanding iTunes Playlist Storage
+
+**Important:** iTunes stores playlists internally in database files (`iTunes Library.xml` and `iTunes Library.itl`), **not** as individual `.m3u` files. You won't find `.m3u` files in your iTunes folder.
+
+Navidrome and other music servers need individual `.m3u` playlist files. Therefore, you must **extract** playlists from iTunes first.
+
+**Your iTunes folder contains:**
+```
+iTunes/
+├── iTunes Library.xml        ← Playlists stored here (readable)
+├── iTunes Library.itl        ← Binary database (not readable)
+├── iTunes Music/             ← Your music files
+└── Album Artwork/
+```
 
 ## Quick Start
 
-### Step 1: Export Your iTunes Playlists
+You have two options to extract playlists from iTunes:
+
+---
+
+### Option A: Manual Export (If iTunes is Installed)
+
+**Best for:** Few playlists, iTunes is available
 
 1. Open iTunes
-2. Go to **File → Library → Export Playlist**
-3. Save as `.m3u` format to a folder (e.g., `iTunes_Playlists` on your Desktop)
-4. Repeat for each playlist you want to migrate
+2. For each playlist:
+   - Click the playlist in the sidebar
+   - Go to **File → Library → Export Playlist**
+   - Choose a destination folder (e.g., `Desktop\iTunes_Playlists`)
+   - Ensure format is `.m3u` (not `.m3u8` or `.txt`)
+   - Click Save
+3. Repeat for all playlists you want to migrate
 
-### Step 2: Run the Interactive Script
+**Then proceed to "Convert Playlists for Navidrome" below.**
+
+---
+
+### Option B: Automatic Extraction from XML (Recommended for Batch)
+
+**Best for:** Many playlists, no iTunes access, or automated workflow
+
+This extracts all playlists at once from your `iTunes Library.xml` file.
+
+#### Step 1: Run the Playlist Extractor
+
+```bash
+python extract_playlists_from_xml.py
+```
+
+The script will prompt you:
+
+```
+============================================================
+iTunes Library.xml Playlist Extractor
+============================================================
+
+This tool extracts playlists from iTunes Library.xml
+and creates individual .m3u files.
+
+------------------------------------------------------------
+Step 1: Locate iTunes Library.xml
+------------------------------------------------------------
+Enter the path to your iTunes Library.xml file.
+(Usually in: Music/iTunes/iTunes Library.xml)
+You can drag and drop the file here
+
+iTunes Library.xml path: N:\Music\iTunes\iTunes Library.xml
+
+Parsing iTunes Library.xml...
+Path: N:\Music\iTunes\iTunes Library.xml
+
+Extracting track information...
+✅ Found 5847 tracks
+Extracting playlists...
+✅ Found 23 user playlist(s)
+
+Playlists found:
+  1. Rock Classics (156 tracks)
+  2. Jazz Favorites (89 tracks)
+  3. Workout Mix (47 tracks)
+  ...
+
+------------------------------------------------------------
+Step 2: Choose Output Folder
+------------------------------------------------------------
+Where should the .m3u files be saved?
+(Leave blank to create 'extracted_playlists' folder in same location as XML)
+
+Output folder path: [press Enter]
+
+✅ Created output folder: N:\Music\iTunes\extracted_playlists
+
+============================================================
+EXTRACTING PLAYLISTS
+============================================================
+
+[1/23] (4%) Rock Classics ... ✅ 156 tracks
+[2/23] (9%) Jazz Favorites ... ✅ 89 tracks
+[3/23] (13%) Workout Mix ... ✅ 47 tracks
+...
+
+============================================================
+EXTRACTION COMPLETE
+============================================================
+✅ Success: 23 playlist(s)
+❌ Errors: 0 playlist(s)
+
+📁 Output location: N:\Music\iTunes\extracted_playlists
+
+============================================================
+NEXT STEPS
+============================================================
+
+Your playlists have been extracted with iTunes file paths.
+To convert them for Navidrome, run:
+
+  python playlist_fixer.py
+
+And point it to: N:\Music\iTunes\extracted_playlists
+
+🎉 All done!
+```
+
+---
+
+### Convert Playlists for Navidrome
 
 Simply run the script and follow the prompts:
 
@@ -223,7 +348,17 @@ C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Toge
 
 ## Features
 
-### ✅ Implemented Features
+### ✅ Playlist Extraction Tool (`extract_playlists_from_xml.py`)
+- **Parse iTunes Library.xml** - Extract playlists without iTunes installed
+- **Batch extraction** - All playlists extracted at once
+- **plist XML parser** - Native Python, no external dependencies
+- **Track metadata preservation** - Preserves artist, title, duration
+- **Smart playlist filtering** - Excludes built-in iTunes playlists
+- **Filename sanitization** - Handles special characters in playlist names
+- **Progress reporting** - Real-time extraction progress
+- **Error handling** - Graceful handling of corrupted playlists
+
+### ✅ Path Conversion Tool (`playlist_fixer.py`)
 - **Fully interactive workflow** - no manual configuration needed
 - **Auto-detection** of Windows path prefixes
 - **Path conversion** from Windows to Linux format
@@ -294,14 +429,50 @@ C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Toge
 - All validation prompts offer retry options if you make a mistake
 - Original files are never modified - only new files are created
 
+### XML Extraction Issues
+
+**"No user playlists found"**
+- The XML parser excludes built-in iTunes playlists (Music, Movies, TV Shows, etc.)
+- Check that you actually have user-created playlists in iTunes
+- Open `iTunes Library.xml` in a text editor and search for `<key>Playlists</key>` to verify
+
+**"Error parsing XML file"**
+- Ensure the file is actually `iTunes Library.xml` (not `.itl` which is binary)
+- The XML file may be corrupted - try exporting a fresh library from iTunes
+- Very large libraries (100k+ tracks) may take longer to parse - be patient
+
+**"Could not find iTunes Library.xml"**
+- Default location is: `Music/iTunes/iTunes Library.xml` (Mac) or `My Music\iTunes\iTunes Library.xml` (Windows)
+- If iTunes is installed, go to iTunes Preferences → Advanced to see library location
+- You can drag and drop the XML file into the terminal for the correct path
+
+**Extracted playlists have wrong paths**
+- This is normal! The XML extraction preserves original iTunes paths
+- You still need to run `playlist_fixer.py` on the extracted playlists
+- The two-step process is: (1) Extract from XML → (2) Convert paths
+
+**Missing tracks in extracted playlists**
+- Check that the tracks exist in your iTunes library
+- Dead/missing tracks in iTunes won't have valid file paths
+- The extractor skips tracks without a valid `Location` field
+
 ## Technical Details
 
 ### Dependencies
-- Uses only Python standard library (os, re, shutil, sys)
+- Uses only Python standard library (os, re, shutil, sys, xml.etree.ElementTree)
 - No external packages required
 - Works with Python 3.x on Windows, macOS, and Linux
 
-### How It Works
+### How XML Extraction Works (`extract_playlists_from_xml.py`)
+1. Parses iTunes Library.xml using native Python XML parser
+2. Extracts track database (ID → file path mapping)
+3. Extracts playlist data (name → list of track IDs)
+4. Filters out built-in iTunes playlists (Master, Distinguished Kind)
+5. Resolves track IDs to file paths
+6. Generates .m3u files with EXTM3U format and metadata
+7. Sanitizes playlist names for filesystem compatibility
+
+### How Path Conversion Works (`playlist_fixer.py`)
 1. Reads playlist files line by line
 2. Preserves comment lines (starting with `#`)
 3. Strips line endings before processing to prevent corruption
@@ -312,12 +483,14 @@ C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Toge
 
 ### Output Structure
 ```
-iTunes_Playlists/
-├── Playlist1.m3u
-├── Playlist2.m3u
-└── converted_for_linux/
-    ├── Playlist1.m3u  (converted)
-    └── Playlist2.m3u  (converted)
+iTunes/
+├── iTunes Library.xml
+└── extracted_playlists/         ← Step 1: XML extraction
+    ├── Rock Classics.m3u
+    ├── Jazz Favorites.m3u
+    └── converted_for_linux/     ← Step 2: Path conversion
+        ├── Rock Classics.m3u    (Navidrome-ready)
+        └── Jazz Favorites.m3u   (Navidrome-ready)
 ```
 
 ## Contributing
