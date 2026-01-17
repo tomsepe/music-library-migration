@@ -14,17 +14,17 @@ import os
 # instruct user:
 # Export Playlists: In iTunes, go to File > Library > Export Playlist and save them as .m3u to a folder on your Desktop (e.g., iTunes_Playlists).
 
-# NEED CODE: ask user to input path to to input folder and store in variable:
-INPUT_FOLDER = "path to input folder or individual music file"
+# Ask user for input path:
+INPUT_FOLDER = input("Enter the path to your iTunes playlists folder: ")
 
 # 2. What part of the path needs to be removed?
 #    (Open an .m3u in Notepad to see exactly how iTunes wrote it)
-WINDOWS_PREFIX = "C:/Users/Tom/Music/iTunes/iTunes Media/Music/"
+WINDOWS_PREFIX = input("Enter the Windows path prefix from iTunes (e.g., C:/Users/Username/Music/iTunes/iTunes Media/Music/): ")
 
 # 3. What should replace it?
 #    Use "../" for relative paths (Recommended - works if you move folders later)
 #    OR use "/music/" if you want absolute Docker paths.
-LINUX_PREFIX = "../"
+LINUX_PREFIX = input("Enter the Linux path prefix for Navidrome (e.g., ../ for relative paths or /music/ for absolute paths): ")
 
 # --- THE LOGIC ---
 def fix_playlists():
