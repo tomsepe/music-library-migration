@@ -1,141 +1,51 @@
-# iTunes to Navidrome Playlist Converter
+# iTunes to Navidrome Migration Tool
 
-A Python utility to migrate iTunes playlists for use with Navidrome music server running in Docker.
+This project provides tools to help migrate your iTunes music library to Navidrome. Navidrome is a self-hosted music server that requires Linux-style paths for file locations, while iTunes exports playlists using Windows-style paths.
 
-## The Problem
+## Project Goal
 
-When you export playlists from iTunes, they contain Windows absolute paths like:
-```
-C:\Users\Tom\Music\iTunes\iTunes Media\Music\Artist\Album\Song.mp3
-```
+The goal is to take an iTunes music library and use it as a guide to import music files into Navidrome. This involves converting iTunes playlist files (.m3u) to be compatible with Navidrome's Linux-based path structure.
 
-But your Docker container running Navidrome uses Linux paths:
-```
-/music/Artist/Album/Song.mp3
-```
+## How It Works
 
-If you upload raw iTunes playlist files to Navidrome, you'll see the playlist names but **0 tracks** because Navidrome cannot find Windows paths (e.g., `C:\`) on a Linux filesystem.
+1. iTunes exports playlists using Windows absolute paths (e.g., `C:\Users\Tom\Music\...`)
+2. Navidrome expects Linux-style paths (e.g., `/music/...`)
+3. This tool converts the paths and fixes the playlist files for Navidrome
 
-This script fixes that by converting the paths automatically.
+## Current Tool: `playlist_fixer.py`
 
-## What It Does
+This script automates the conversion of iTunes playlist files:
 
-- Reads iTunes-exported `.m3u` and `.m3u8` playlist files
-- Converts Windows backslashes (`\`) to Linux forward slashes (`/`)
-- Replaces Windows path prefixes with Linux/Docker paths or relative paths
-- Preserves playlist metadata and comments
-- Outputs converted files to a separate folder (doesn't overwrite originals)
+### Features:
+- Converts Windows backslashes to Linux forward slashes
+- Replaces Windows paths with Linux paths
+- Preserves comments in playlist files
+- Creates a separate output folder to avoid overwriting originals
+- Provides clear feedback on conversion progress
 
-## Prerequisites
+### Usage:
+1. Export your iTunes playlists: In iTunes, go to File > Library > Export Playlist and save them as .m3u files to a folder on your Desktop
+2. Edit the configuration in `playlist_fixer.py`:
+   - Set `INPUT_FOLDER` to the path where your iTunes playlists are located
+   - Set `WINDOWS_PREFIX` to the Windows path prefix from iTunes
+   - Set `LINUX_PREFIX` to the Linux path prefix for Navidrome (e.g., `../` for relative paths or `/music/` for absolute paths)
+3. Run the script: `python playlist_fixer.py`
 
-- Python 3.x installed on your system
-- iTunes playlists exported as `.m3u` files
-- Navidrome music server (typically running in Docker)
-
-## Quick Start
-
-### Step 1: Export Your iTunes Playlists
-
-1. Open iTunes
-2. Go to **File → Library → Export Playlist**
-3. Save as `.m3u` format to a folder (e.g., `iTunes_Playlists` on your Desktop)
-4. Repeat for each playlist you want to migrate
-
-### Step 2: Configure the Script
-
-Open `playlist_fixer.py` and edit these three configuration variables:
-
+### Example Configuration:
 ```python
-# 1. Where are your iTunes .m3u files?
-INPUT_FOLDER = "path to input folder or individual music file"
-
-# 2. What part of the path needs to be removed?
-#    (Open an .m3u in Notepad to see how iTunes wrote the paths)
-WINDOWS_PREFIX = "C:/Users/Tom/Music/iTunes/iTunes Media/Music/"
-
-# 3. What should replace it?
-LINUX_PREFIX = "../"  # Relative path (recommended)
-# OR
-LINUX_PREFIX = "/music/"  # Absolute Docker path
+INPUT_FOLDER = "C:/Users/Username/Desktop/iTunes_Playlists"
+WINDOWS_PREFIX = "C:/Users/Username/Music/iTunes/iTunes Media/Music/"
+LINUX_PREFIX = "../"
 ```
 
-**How to find your WINDOWS_PREFIX:**
-1. Open one of your exported `.m3u` files in Notepad
-2. Look at the file paths - they'll look like: `C:\Users\YourName\Music\...`
-3. Copy everything up to (and including) the last folder before artist names
-4. Replace backslashes with forward slashes
+## Next Steps
 
-**Choosing LINUX_PREFIX:**
-- Use `"../"` for relative paths (recommended - more portable)
-- Use `"/music/"` if your Docker volume is mounted at `/music/` and you want absolute paths
-
-### Step 3: Run the Script
-
-```bash
-python playlist_fixer.py
-```
-
-The script will:
-- Create a `converted_for_linux` subfolder in your input directory
-- Convert all `.m3u` and `.m3u8` files
-- Show progress for each playlist
-
-### Step 4: Upload to Navidrome
-
-1. Copy the converted playlist files from the `converted_for_linux` folder
-2. Upload them to your Navidrome playlists directory
-3. Restart Navidrome or refresh playlists in the UI
-
-## Example
-
-**Before (iTunes export):**
-```
-C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Together.mp3
-```
-
-**After (script conversion with relative paths):**
-```
-../The Beatles/Abbey Road/01 Come Together.mp3
-```
-
-## Project Status
-
-### ✅ Working Features
-- Path conversion from Windows to Linux format
-- Batch processing of multiple playlists
-- Preserves playlist metadata
-- Safe output to separate folder
-
-### 🚧 Planned Features (Currently Unfinished)
-- Interactive user input for folder paths (currently requires manual editing)
-- Automatic file copying to network shares (Samba/NFS)
-- Verification that music files exist before conversion
-
-See lines 16, 72-75 in `playlist_fixer.py` for TODO items.
-
-## Troubleshooting
-
-**"0 tracks" still showing in Navidrome:**
-- Verify your music files are in the correct location on the server
-- Check that the file paths in the converted playlists match your actual file structure
-- Ensure file permissions allow Navidrome to read the music files
-
-**Encoding errors:**
-- The script uses UTF-8 encoding with error handling for special characters
-- If you see issues with song titles, check your original iTunes export encoding
-
-**Path not found:**
-- Make sure your `INPUT_FOLDER` uses forward slashes (`/`) even on Windows
-- Use absolute paths, e.g., `C:/Users/Tom/Desktop/iTunes_Playlists`
+This is an unfinished tool that can be extended to:
+1. Automate the entire import process from iTunes to Navidrome
+2. Handle music file copying/moving
+3. Create a complete migration workflow
+4. Support different path structures based on user setup
 
 ## Contributing
 
-This is a work-in-progress utility. Feel free to:
-- Add the missing user input functionality
-- Implement network file copying
-- Add file existence validation
-- Improve error handling
-
-## License
-
-Open source - use and modify as needed for your iTunes to Navidrome migration.
+This project is a work in progress. Contributions to improve the iTunes to Navidrome migration workflow are welcome. Please submit issues or pull requests to help enhance this tool.
