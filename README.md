@@ -21,13 +21,16 @@ This script automates the conversion of iTunes playlist files:
 - Replaces Windows paths with Linux paths
 - Preserves comments in playlist files
 - Creates a separate output folder to avoid overwriting originals
-- Provides clear feedback on conversion progress
-- Asks users for configuration inputs at runtime
+- Interactive user prompts for configuration
+- Input validation and error handling
+- Progress reporting during processing
+- Confirmation before operation
+- Comprehensive error messages
 
 ### Usage:
 1. Export your iTunes playlists: In iTunes, go to File > Library > Export Playlist and save them as .m3u files to a folder on your Desktop
 2. Run the script: `python playlist_fixer.py`
-3. Follow the prompts to enter:
+3. Follow the interactive prompts to enter:
    - Path to your iTunes playlists folder
    - Windows path prefix from iTunes
    - Linux path prefix for Navidrome
@@ -38,6 +41,15 @@ INPUT_FOLDER = "C:/Users/Username/Desktop/iTunes_Playlists"
 WINDOWS_PREFIX = "C:/Users/Username/Music/iTunes/iTunes Media/Music/"
 LINUX_PREFIX = "../"
 ```
+
+## Enhanced Features:
+- Interactive user prompts instead of manual code editing
+- Input validation for all paths
+- Progress reporting during processing
+- Confirmation before operation
+- Error handling and graceful exits
+- Clear progress indicators
+- Comprehensive error messages
 
 ## Next Steps
 
