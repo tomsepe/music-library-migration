@@ -98,7 +98,11 @@ def validate_writable(path):
 
 
 def check_rsync_available():
-    """Check if rsync is available on the system."""
+    """
+    Check if rsync is available on the system.
+    Returns (available: bool, use_wsl: bool)
+    """
+    # First try direct rsync
     try:
         result = subprocess.run(
             ['rsync', '--version'],
@@ -106,9 +110,41 @@ def check_rsync_available():
             text=True,
             timeout=5
         )
-        return result.returncode == 0
+        if result.returncode == 0:
+            return (True, False)
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+        pass
+    
+    # On Windows, try WSL rsync as fallback
+    if sys.platform == 'win32':
+        try:
+            result = subprocess.run(
+                ['wsl', 'rsync', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                return (True, True)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+    
+    return (False, False)
+
+
+def convert_to_wsl_path(windows_path):
+    """Convert Windows path to WSL path format."""
+    # Normalize the path
+    path = os.path.normpath(windows_path)
+    
+    # Convert drive letter (C:\ -> /mnt/c/)
+    if len(path) >= 2 and path[1] == ':':
+        drive = path[0].lower()
+        rest = path[2:].replace('\\', '/')
+        return f'/mnt/{drive}{rest}'
+    
+    # Already a WSL path or relative path
+    return path.replace('\\', '/')
 
 
 # ============================================================
@@ -285,7 +321,7 @@ def preview_copy_operation(input_folder, output_folder):
 # COPY FUNCTIONS
 # ============================================================
 
-def copy_artist_folders_rsync(input_folder, output_folder):
+def copy_artist_folders_rsync(input_folder, output_folder, use_wsl=False):
     """
     Copy artist folders from input to output using rsync.
     Returns (copied_count, skipped_count, errors_list)
@@ -325,14 +361,29 @@ def copy_artist_folders_rsync(input_folder, output_folder):
                 # --partial: keep partial files on interruption
                 # --human-readable: human-readable sizes
                 # Trailing slash on source means copy contents of folder, not folder itself
-                rsync_cmd = [
-                    'rsync',
-                    '-av',
-                    '--partial',
-                    '--human-readable',
-                    source_path + os.sep,  # Trailing slash means copy contents
-                    dest_path
-                ]
+                
+                if use_wsl:
+                    # Convert Windows paths to WSL paths
+                    source_wsl = convert_to_wsl_path(source_path) + '/'
+                    dest_wsl = convert_to_wsl_path(dest_path)
+                    rsync_cmd = [
+                        'wsl',
+                        'rsync',
+                        '-av',
+                        '--partial',
+                        '--human-readable',
+                        source_wsl,
+                        dest_wsl
+                    ]
+                else:
+                    rsync_cmd = [
+                        'rsync',
+                        '-av',
+                        '--partial',
+                        '--human-readable',
+                        source_path + os.sep,  # Trailing slash means copy contents
+                        dest_path
+                    ]
 
                 # Run rsync (suppress stdout for cleaner output, stderr for errors)
                 result = subprocess.run(
@@ -381,7 +432,8 @@ def main():
         print_welcome()
 
         # Check for rsync
-        if not check_rsync_available():
+        rsync_available, use_wsl = check_rsync_available()
+        if not rsync_available:
             print("\n❌ Error: rsync is not available on this system")
             print("\nrsync is required for this tool. Please install rsync:")
             print("  • Windows: Install via WSL, Git Bash, or Cygwin")
@@ -389,7 +441,10 @@ def main():
             print("  • Linux: Install via package manager (e.g., apt install rsync)")
             sys.exit(1)
 
-        print("✅ rsync is available\n")
+        if use_wsl:
+            print("✅ rsync is available via WSL\n")
+        else:
+            print("✅ rsync is available\n")
 
         # Show Navidrome structure info
         print_navidrome_structure_info()
@@ -413,7 +468,7 @@ def main():
 
         # Step 4: Execute copy
         copied_count, skipped_count, errors = copy_artist_folders_rsync(
-            input_folder, output_folder
+            input_folder, output_folder, use_wsl
         )
 
         # Display summary
