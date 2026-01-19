@@ -1,26 +1,28 @@
-# iTunes to Navidrome Playlist Converter
+# iTunes to Navidrome Migration Tools
 
-A fully interactive Python utility to migrate iTunes playlists for use with Navidrome music server running in Docker.
+A fully interactive Python utility suite to migrate your iTunes library (playlists and music files) for use with Navidrome music server running in Docker.
 
 ## The Problem
 
-When you export playlists from iTunes, they contain Windows absolute paths like:
-```
-C:\Users\Tom\Music\iTunes\iTunes Media\Music\Artist\Album\Song.mp3
-```
+When migrating from iTunes to Navidrome, you face two challenges:
 
-But your Docker container running Navidrome uses Linux paths:
-```
-/music/Artist/Album/Song.mp3
-```
+1. **Playlist Path Conversion**: iTunes playlists contain Windows absolute paths like:
+   ```
+   C:\Users\Tom\Music\iTunes\iTunes Media\Music\Artist\Album\Song.mp3
+   ```
+   But your Docker container running Navidrome uses Linux paths:
+   ```
+   /music/Artist/Album/Song.mp3
+   ```
+   If you upload raw iTunes playlist files to Navidrome, you'll see the playlist names but **0 tracks** because Navidrome cannot find Windows paths (e.g., `C:\`) on a Linux filesystem.
 
-If you upload raw iTunes playlist files to Navidrome, you'll see the playlist names but **0 tracks** because Navidrome cannot find Windows paths (e.g., `C:\`) on a Linux filesystem.
+2. **Music File Location**: Your music files are in your iTunes library, but Navidrome needs them in its music folder. The files need to be copied to the correct location with the proper folder structure.
 
-This script fixes that by converting the paths automatically.
+These tools solve both problems: converting playlist paths and copying music files to Navidrome.
 
 ## What It Does
 
-### Two-Tool Workflow:
+### Three-Tool Workflow:
 
 **Tool 1: `extract_playlists_from_xml.py`** (Optional - if no iTunes access)
 - Extracts playlists directly from `iTunes Library.xml`
@@ -33,6 +35,7 @@ This script fixes that by converting the paths automatically.
 - Auto-detects Windows path prefixes from your playlists
 - Converts Windows backslashes (`\`) to Linux forward slashes (`/`)
 - Replaces Windows path prefixes with Linux/Docker paths or relative paths
+- Optionally strips iTunes folder structure (e.g., "iTunes Media/Music/")
 - Handles encoding issues gracefully (UTF-8 with latin-1 fallback)
 - Preserves playlist metadata and comments
 - Outputs converted files to a separate folder (doesn't overwrite originals)
@@ -40,11 +43,25 @@ This script fixes that by converting the paths automatically.
 - Real-time progress reporting with track counts
 - Comprehensive error handling and validation
 
+**Tool 3: `copy_songs.py`** (Music library copier)
+- **Uses rsync** for efficient, incremental copying of music files
+- Copies artist folders from iTunes library to Navidrome music folder
+- Preserves file permissions, timestamps, and metadata
+- Only transfers new or changed files (incremental updates)
+- Explains Navidrome folder structure requirements
+- Validates input/output paths and permissions
+- Real-time progress reporting per artist folder
+- Handles interruptions gracefully (resumable transfers)
+
 ## Prerequisites
 
 - Python 3.x installed on your system (no external dependencies needed)
 - iTunes library with playlists you want to migrate
 - Navidrome music server (typically running in Docker)
+- **rsync** (required for `copy_songs.py`):
+  - **Windows**: Install via WSL, Git Bash, or Cygwin
+  - **macOS**: Already installed (or install via Homebrew: `brew install rsync`)
+  - **Linux**: Install via package manager (e.g., `apt install rsync` or `yum install rsync`)
 
 ## Understanding iTunes Playlist Storage
 
@@ -180,7 +197,7 @@ Simply run the script and follow the prompts:
 python playlist_fixer.py
 ```
 
-The script will guide you through 6 interactive steps:
+The script will guide you through 7 interactive steps:
 
 #### Step 1: Input Folder
 You'll be prompted to enter the folder containing your iTunes playlists. You can drag and drop the folder into the terminal.
@@ -240,7 +257,35 @@ What should replace the Windows prefix?
 Choice (1/2/3): 1
 ```
 
-#### Step 4: Preview Conversion
+#### Step 4: Strip iTunes Folder Structure (Optional)
+The script asks if you want to remove iTunes-specific folder structure:
+
+```
+============================================================
+Step 4: Strip iTunes Folder Structure
+------------------------------------------------------------
+
+Do you want to remove iTunes folder structure from paths?
+
+This will remove folders like 'iTunes Media/Music/', 'ITunes Music/',
+'iTunes/', etc. and keep only the Artist/Album/Song.mp3 structure.
+
+Example with iTunes structure KEPT:
+  ../iTunes Media/Music/The Beatles/Abbey Road/01 Come Together.mp3
+
+Example with iTunes structure REMOVED:
+  ../The Beatles/Abbey Road/01 Come Together.mp3
+
+1. Keep iTunes structure (default)
+   (Preserves full path including iTunes folders)
+
+2. Remove iTunes structure
+   (Keeps only Artist/Album/Song.mp3)
+
+Choice (1/2): 2
+```
+
+#### Step 5: Preview Conversion
 The script shows you sample conversions for confirmation:
 
 ```
@@ -259,7 +304,7 @@ After:  ../Pink Floyd/Dark Side of the Moon/01 Speak to Me.mp3
 Proceed with conversion? (y/n): y
 ```
 
-#### Step 5: Execute Conversion
+#### Step 6: Execute Conversion
 The script converts all playlists with real-time progress:
 
 ```
@@ -281,7 +326,7 @@ CONVERSION COMPLETE
 📁 Output location: C:\Users\Tom\Desktop\iTunes_Playlists\converted_for_linux
 ```
 
-#### Step 6: Optional Network Share Copy
+#### Step 7: Optional Network Share Copy
 Optionally copy the converted files to a network share:
 
 ```
@@ -323,7 +368,128 @@ COPYING TO NETWORK SHARE
 🎉 All done!
 ```
 
-### Step 3: Upload to Navidrome
+---
+
+### Step 3: Copy Music Files to Navidrome (Optional but Recommended)
+
+If your music files are still in your iTunes library and need to be copied to your Navidrome music folder, use this tool:
+
+```bash
+python copy_songs.py
+```
+
+The script will guide you through the process:
+
+#### Step 1: Input Folder (iTunes Music Location)
+Enter the path to your iTunes music folder containing artist folders:
+
+```
+============================================================
+Step 1: Input Folder (iTunes Music Location)
+------------------------------------------------------------
+Enter the path to your iTunes music folder.
+
+This should be the folder containing your artist folders.
+Common locations:
+  • Windows: C:\Users\YourName\Music\iTunes\iTunes Media\Music
+  • Windows: C:\Users\YourName\Music\iTunes\ITunes Music
+  • macOS: ~/Music/iTunes/iTunes Media/Music
+
+(You can drag and drop the folder here)
+
+Input folder path: C:\Users\Tom\Music\iTunes\iTunes Media\Music
+
+✅ Input folder validated: C:\Users\Tom\Music\iTunes\iTunes Media\Music
+```
+
+#### Step 2: Output Folder (Navidrome Music Location)
+Enter where Navidrome expects your music files:
+
+```
+============================================================
+Step 2: Output Folder (Navidrome Music Location)
+------------------------------------------------------------
+Enter the path where Navidrome expects your music files.
+
+This is typically:
+  • Docker volume mount: /mnt/music or /music
+  • Local folder: C:\Music or ~/Music
+  • Network share: \\nas\music or /mnt/nas/music
+
+The tool will copy artist folders into this location.
+(You can drag and drop the folder here)
+
+Output folder path: /mnt/music
+
+✅ Output folder validated: /mnt/music
+```
+
+#### Step 3: Preview and Confirm
+The script shows what will be copied:
+
+```
+============================================================
+PREVIEW: Copy Operation
+============================================================
+
+Found 247 artist folder(s) to copy
+
+Sample artist folders:
+  1. The Beatles
+  2. Pink Floyd
+  3. Led Zeppelin
+  ... and 244 more
+
+Source: C:\Users\Tom\Music\iTunes\iTunes Media\Music
+Destination: /mnt/music
+
+Operation:
+  • Artist folders will be copied from source to destination
+  • Existing artist folders in destination will be updated (rsync)
+  • Files will be preserved (no deletion of existing files)
+  • Only new/changed files will be transferred
+
+------------------------------------------------------------
+
+Proceed with copy? (y/n): y
+```
+
+#### Step 4: Execute Copy
+The script copies artist folders with progress:
+
+```
+============================================================
+COPYING ARTIST FOLDERS
+============================================================
+
+[1/247] (0%) The Beatles ... ✅ Copied
+[2/247] (1%) Pink Floyd ... ✅ Updated
+[3/247] (1%) Led Zeppelin ... ✅ Copied
+...
+
+============================================================
+COPY COMPLETE
+============================================================
+✅ Processed: 247 artist folder(s)
+❌ Errors: 0 artist folder(s)
+
+ℹ️  Note: rsync only transferred new or changed files.
+   Existing files were preserved and not re-copied.
+
+🎉 All done!
+
+Next steps:
+  1. Verify your music files in the Navidrome music folder
+  2. Update your Navidrome configuration if needed
+  3. Restart Navidrome or trigger a library scan
+  4. Your playlists should now work with the copied music files
+```
+
+**Note:** If your music files are already in the correct location for Navidrome, you can skip this step.
+
+---
+
+### Step 4: Upload Playlists to Navidrome
 
 1. Find the converted playlists in the `converted_for_linux` subfolder (or network share if you used that option)
 2. Upload them to your Navidrome playlists directory
@@ -362,6 +528,7 @@ C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Toge
 - **Fully interactive workflow** - no manual configuration needed
 - **Auto-detection** of Windows path prefixes
 - **Path conversion** from Windows to Linux format
+- **iTunes structure stripping** - optional removal of iTunes folder structure
 - **Batch processing** of multiple playlists with progress indicators
 - **Encoding handling** - UTF-8 with latin-1 fallback for special characters
 - **Case-insensitive path matching** for Windows compatibility
@@ -373,6 +540,18 @@ C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Toge
 - **Drag-and-drop support** for folder paths
 - **Real-time progress reporting** with track counts
 - **Validation** of all user inputs with retry options
+
+### ✅ Music Library Copier (`copy_songs.py`)
+- **rsync integration** - efficient, incremental file copying
+- **Incremental updates** - only transfers new or changed files
+- **Preserves metadata** - file permissions, timestamps, and attributes
+- **Navidrome structure explanation** - clear guidance on folder requirements
+- **Path validation** - validates input/output folders and permissions
+- **Progress reporting** - real-time status per artist folder
+- **Resumable transfers** - handles interruptions gracefully
+- **Error handling** - comprehensive error reporting and recovery
+- **Drag-and-drop support** - easy path input
+- **Auto-creates output folder** - if destination doesn't exist
 
 ### Critical Bug Fixes (v2.0)
 - **Line ending corruption fix** - Properly handles Windows `\r\n` line endings
@@ -456,11 +635,51 @@ C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Toge
 - Dead/missing tracks in iTunes won't have valid file paths
 - The extractor skips tracks without a valid `Location` field
 
+### Music Library Copy Issues
+
+**"rsync is not available on this system"**
+- Install rsync for your platform:
+  - **Windows**: Install via WSL, Git Bash, or Cygwin
+  - **macOS**: Already installed, or use `brew install rsync`
+  - **Linux**: Use package manager: `apt install rsync` or `yum install rsync`
+- Verify installation: Run `rsync --version` in terminal
+
+**"No artist folders found in input directory"**
+- Verify you're pointing to the correct iTunes music folder
+- The folder should contain artist subdirectories (e.g., "The Beatles", "Pink Floyd")
+- Common locations:
+  - Windows: `C:\Users\YourName\Music\iTunes\iTunes Media\Music`
+  - Windows: `C:\Users\YourName\Music\iTunes\ITunes Music`
+  - macOS: `~/Music/iTunes/iTunes Media/Music`
+
+**Copy operation is very slow**
+- This is normal for large libraries - rsync only transfers what's needed
+- First-time copy will take longer as all files are transferred
+- Subsequent runs are faster (only new/changed files)
+- Network shares may be slower than local drives
+- You can cancel with Ctrl+C and resume later (rsync handles partial transfers)
+
+**"Permission denied" errors**
+- Ensure you have read access to the input folder
+- Ensure you have write access to the output folder
+- For network shares, verify the share is mounted and accessible
+- On Linux/macOS, you may need to use `sudo` for certain directories
+
+**Files copied but Navidrome can't find them**
+- Verify the folder structure matches Navidrome's expectations: `/music/Artist/Album/Song.mp3`
+- Check file permissions - Navidrome needs read access to music files
+- Ensure the Navidrome container/user has access to the music folder
+- Restart Navidrome or trigger a library scan after copying
+
 ## Technical Details
 
 ### Dependencies
-- Uses only Python standard library (os, re, shutil, sys, xml.etree.ElementTree)
-- No external packages required
+- **Python standard library only** for `extract_playlists_from_xml.py` and `playlist_fixer.py`:
+  - os, re, shutil, sys, xml.etree.ElementTree
+- **rsync** required for `copy_songs.py`:
+  - Windows: Install via WSL, Git Bash, or Cygwin
+  - macOS: Pre-installed (or `brew install rsync`)
+  - Linux: Install via package manager
 - Works with Python 3.x on Windows, macOS, and Linux
 
 ### How XML Extraction Works (`extract_playlists_from_xml.py`)
@@ -478,19 +697,45 @@ C:\Users\Tom\Music\iTunes\iTunes Media\Music\The Beatles\Abbey Road\01 Come Toge
 3. Strips line endings before processing to prevent corruption
 4. Converts backslashes to forward slashes
 5. Uses case-insensitive regex to replace Windows prefix with Linux prefix
-6. Re-adds normalized line endings (`\n`)
-7. Writes output files with UTF-8 encoding
+6. Optionally strips iTunes folder structure (e.g., "iTunes Media/Music/")
+7. Re-adds normalized line endings (`\n`)
+8. Writes output files with UTF-8 encoding
 
-### Output Structure
+### How Music Library Copying Works (`copy_songs.py`)
+1. Validates input folder (iTunes music location) contains artist folders
+2. Validates output folder (Navidrome music location) exists and is writable
+3. Lists all artist folders in the input directory
+4. For each artist folder, uses rsync to copy/update:
+   - `-a`: Archive mode (preserves permissions, timestamps, etc.)
+   - `-v`: Verbose output
+   - `--partial`: Keep partial files on interruption
+   - `--human-readable`: Human-readable file sizes
+5. Only transfers new or changed files (rsync's incremental sync)
+6. Reports progress and errors per artist folder
+
+### Complete Workflow Structure
 ```
 iTunes/
 ├── iTunes Library.xml
+├── iTunes Media/
+│   └── Music/                    ← Source for copy_songs.py
+│       ├── The Beatles/
+│       ├── Pink Floyd/
+│       └── ...
 └── extracted_playlists/         ← Step 1: XML extraction
     ├── Rock Classics.m3u
     ├── Jazz Favorites.m3u
     └── converted_for_linux/     ← Step 2: Path conversion
         ├── Rock Classics.m3u    (Navidrome-ready)
         └── Jazz Favorites.m3u   (Navidrome-ready)
+
+Navidrome Music Folder/           ← Step 3: copy_songs.py destination
+├── The Beatles/
+│   ├── Abbey Road/
+│   │   └── 01 Come Together.mp3
+│   └── Sgt. Pepper's/
+└── Pink Floyd/
+    └── Dark Side of the Moon/
 ```
 
 ## Contributing
