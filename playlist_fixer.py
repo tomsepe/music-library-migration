@@ -257,19 +257,21 @@ def strip_itunes_structure(path):
     """
     Remove iTunes-specific folder structure from path.
     Removes patterns like 'iTunes Media/Music/', 'iTunes/iTunes Media/Music/', 
-    'ITunes Music/', 'iTunes/ITunes Music/', etc.
+    'ITunes Music/', 'iTunes/ITunes Music/', 'iTunes/iTunes Music/', etc.
     Returns path with only Artist/Album/Song structure.
     """
     # Common iTunes folder patterns to remove (case-insensitive)
     # Order matters: check more specific patterns first
+    # Using word boundaries and explicit patterns to catch all variations
     itunes_patterns = [
-        r'iTunes/iTunes\s+Media/Music/',   # iTunes/iTunes Media/Music/
-        r'iTunes/ITunes\s+Music/',          # iTunes/ITunes Music/
-        r'iTunes\s+Media/Music/',           # iTunes Media/Music/
-        r'ITunes\s+Music/',                 # ITunes Music/ (capital I)
-        r'iTunes\s+Music/',                 # iTunes Music/ (lowercase i)
-        r'iTunes\s+Media/',                 # iTunes Media/
-        r'iTunes/',                         # iTunes/
+        r'iTunes[/\\]iTunes\s+Media[/\\]Music[/\\]',   # iTunes/iTunes Media/Music/ or iTunes\iTunes Media\Music\
+        r'iTunes[/\\]iTunes\s+Music[/\\]',             # iTunes/iTunes Music/ or iTunes\iTunes Music\
+        r'iTunes[/\\]ITunes\s+Music[/\\]',              # iTunes/ITunes Music/ (mixed case)
+        r'iTunes\s+Media[/\\]Music[/\\]',               # iTunes Media/Music/
+        r'ITunes\s+Music[/\\]',                         # ITunes Music/ (capital I)
+        r'iTunes\s+Music[/\\]',                         # iTunes Music/ (lowercase i)
+        r'iTunes\s+Media[/\\]',                         # iTunes Media/
+        r'iTunes[/\\]',                                 # iTunes/ or iTunes\
     ]
     
     # Try each pattern and remove if found
@@ -277,8 +279,8 @@ def strip_itunes_structure(path):
         # Use case-insensitive regex
         path = re.sub(pattern, '', path, flags=re.IGNORECASE)
     
-    # Clean up any double slashes
-    path = re.sub(r'/+', '/', path)
+    # Clean up any double slashes or backslashes
+    path = re.sub(r'[/\\]+', '/', path)
     
     # Remove leading slash if present (to make it relative)
     if path.startswith('/'):
