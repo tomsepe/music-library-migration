@@ -253,7 +253,141 @@ def get_linux_prefix():
             print("Invalid choice. Please enter 1, 2, or 3.")
 
 
-def preview_conversion(input_folder, windows_prefix, linux_prefix):
+def strip_itunes_structure(path):
+    """
+    Remove iTunes-specific folder structure from path.
+    Removes patterns like 'iTunes Media/Music/', 'iTunes/iTunes Media/Music/', 
+    'ITunes Music/', 'iTunes/ITunes Music/', etc.
+    Returns path with only Artist/Album/Song structure.
+    """
+    # Common iTunes folder patterns to remove (case-insensitive)
+    # Order matters: check more specific patterns first
+    itunes_patterns = [
+        r'iTunes/iTunes\s+Media/Music/',   # iTunes/iTunes Media/Music/
+        r'iTunes/ITunes\s+Music/',          # iTunes/ITunes Music/
+        r'iTunes\s+Media/Music/',           # iTunes Media/Music/
+        r'ITunes\s+Music/',                 # ITunes Music/ (capital I)
+        r'iTunes\s+Music/',                 # iTunes Music/ (lowercase i)
+        r'iTunes\s+Media/',                 # iTunes Media/
+        r'iTunes/',                         # iTunes/
+    ]
+    
+    # Try each pattern and remove if found
+    for pattern in itunes_patterns:
+        # Use case-insensitive regex
+        path = re.sub(pattern, '', path, flags=re.IGNORECASE)
+    
+    # Clean up any double slashes
+    path = re.sub(r'/+', '/', path)
+    
+    # Remove leading slash if present (to make it relative)
+    if path.startswith('/'):
+        path = path[1:]
+    
+    return path
+
+
+def get_strip_itunes_structure(input_folder, windows_prefix, linux_prefix):
+    """
+    Ask user if they want to strip iTunes folder structure.
+    Shows examples of what will happen.
+    Returns True if user wants to strip, False otherwise.
+    """
+    print("\n" + "-" * 60)
+    print("Step 4: Strip iTunes Folder Structure")
+    print("-" * 60)
+    
+    # Get a sample path to show the difference
+    m3u_files = find_m3u_files(input_folder)
+    if not m3u_files:
+        return False
+    
+    first_file = os.path.join(input_folder, m3u_files[0])
+    
+    try:
+        # Read first file to get sample
+        try:
+            with open(first_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+        except UnicodeDecodeError:
+            with open(first_file, 'r', encoding='latin-1') as f:
+                lines = f.readlines()
+        
+        # Find first sample path
+        sample_original = None
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                sample_original = stripped
+                break
+        
+        if sample_original:
+            # Show what happens with and without stripping
+            cleaned = sample_original.replace("\\", "/")
+            
+            # Apply prefix replacement first
+            pattern = re.escape(windows_prefix)
+            after_prefix = re.sub(pattern, linux_prefix, cleaned, flags=re.IGNORECASE)
+            
+            # Show with iTunes structure
+            with_itunes = after_prefix
+            
+            # Show without iTunes structure
+            without_itunes = strip_itunes_structure(after_prefix)
+            
+            print("\nDo you want to remove iTunes folder structure from paths?")
+            print("\nThis will remove folders like 'iTunes Media/Music/', 'ITunes Music/',")
+            print("'iTunes/', etc. and keep only the Artist/Album/Song.mp3 structure.\n")
+            
+            print("Example with iTunes structure KEPT:")
+            print(f"  {with_itunes}")
+            print("\nExample with iTunes structure REMOVED:")
+            print(f"  {without_itunes}")
+            
+            if with_itunes != without_itunes:
+                print("\n⚠️  Note: The paths will be different!")
+            else:
+                print("\nℹ️  Note: No iTunes structure detected in this path.")
+            
+            print("\n1. Keep iTunes structure (default)")
+            print("   (Preserves full path including iTunes folders)")
+            print("\n2. Remove iTunes structure")
+            print("   (Keeps only Artist/Album/Song.mp3)")
+            
+            while True:
+                choice = input("\nChoice (1/2): ").strip()
+                
+                if choice == '' or choice == '1':
+                    return False
+                elif choice == '2':
+                    return True
+                else:
+                    print("Invalid choice. Please enter 1 or 2.")
+        else:
+            # No sample found, just ask
+            print("\nDo you want to remove iTunes folder structure from paths?")
+            print("(e.g., 'iTunes Media/Music/', 'ITunes Music/', 'iTunes/' will be removed)")
+            print("\n1. Keep iTunes structure (default)")
+            print("2. Remove iTunes structure")
+            
+            while True:
+                choice = input("\nChoice (1/2): ").strip()
+                
+                if choice == '' or choice == '1':
+                    return False
+                elif choice == '2':
+                    return True
+                else:
+                    print("Invalid choice. Please enter 1 or 2.")
+    
+    except Exception as e:
+        print(f"⚠️  Warning: Could not preview iTunes structure: {e}")
+        print("\nDo you want to remove iTunes folder structure? (y/n): ", end='')
+        choice = input().strip().lower()
+        return choice == 'y'
+
+
+def preview_conversion(input_folder, windows_prefix, linux_prefix, strip_itunes=False):
     """Show sample conversions and ask for confirmation."""
     m3u_files = find_m3u_files(input_folder)
     if not m3u_files:
@@ -279,12 +413,19 @@ def preview_conversion(input_folder, windows_prefix, linux_prefix):
                 cleaned = stripped.replace("\\", "/")
                 pattern = re.escape(windows_prefix)
                 converted = re.sub(pattern, linux_prefix, cleaned, flags=re.IGNORECASE)
+                
+                # Apply iTunes structure stripping if requested
+                if strip_itunes:
+                    converted = strip_itunes_structure(converted)
+                
                 samples.append((stripped, converted))
                 if len(samples) >= 3:
                     break
 
         if samples:
             print_preview(samples)
+            if strip_itunes:
+                print("\nℹ️  Note: iTunes folder structure has been removed from paths.")
             print("\n" + "-" * 60)
             confirm = input("\nProceed with conversion? (y/n): ").strip().lower()
             return confirm == 'y'
@@ -302,7 +443,7 @@ def preview_conversion(input_folder, windows_prefix, linux_prefix):
 # CONVERSION FUNCTIONS
 # ============================================================
 
-def convert_single_playlist(input_path, output_path, windows_prefix, linux_prefix):
+def convert_single_playlist(input_path, output_path, windows_prefix, linux_prefix, strip_itunes=False):
     """
     Convert a single playlist file.
     Returns (success: bool, track_count: int, error_msg: str)
@@ -343,6 +484,10 @@ def convert_single_playlist(input_path, output_path, windows_prefix, linux_prefi
                 pattern = re.escape(windows_prefix)
                 cleaned_line = re.sub(pattern, linux_prefix, cleaned_line, flags=re.IGNORECASE)
 
+            # 3. Strip iTunes folder structure if requested
+            if strip_itunes:
+                cleaned_line = strip_itunes_structure(cleaned_line)
+
             # Re-add normalized line ending
             new_lines.append(cleaned_line + '\n')
             track_count += 1
@@ -359,7 +504,7 @@ def convert_single_playlist(input_path, output_path, windows_prefix, linux_prefi
         return (False, 0, str(e))
 
 
-def fix_playlists_batch(input_folder, output_folder, windows_prefix, linux_prefix):
+def fix_playlists_batch(input_folder, output_folder, windows_prefix, linux_prefix, strip_itunes=False):
     """
     Convert all playlists in the input folder.
     Returns (success_count, error_count, errors_list)
@@ -383,6 +528,8 @@ def fix_playlists_batch(input_folder, output_folder, windows_prefix, linux_prefi
     print("\n" + "=" * 60)
     print("CONVERTING PLAYLISTS")
     print("=" * 60 + "\n")
+    if strip_itunes:
+        print("ℹ️  Stripping iTunes folder structure from paths...\n")
 
     success_count = 0
     error_count = 0
@@ -397,7 +544,7 @@ def fix_playlists_batch(input_folder, output_folder, windows_prefix, linux_prefi
 
         # Convert the playlist
         success, track_count, error_msg = convert_single_playlist(
-            input_path, output_path, windows_prefix, linux_prefix
+            input_path, output_path, windows_prefix, linux_prefix, strip_itunes
         )
 
         if success:
@@ -563,21 +710,24 @@ def main():
             print("\n❌ Invalid Linux prefix")
             return
 
-        # Step 4: Preview and confirm
-        if not preview_conversion(input_folder, windows_prefix, linux_prefix):
+        # Step 4: Ask about stripping iTunes structure
+        strip_itunes = get_strip_itunes_structure(input_folder, windows_prefix, linux_prefix)
+
+        # Step 5: Preview and confirm
+        if not preview_conversion(input_folder, windows_prefix, linux_prefix, strip_itunes):
             print("\n❌ Cancelled by user")
             return
 
-        # Step 5: Execute conversion
+        # Step 6: Execute conversion
         output_folder = os.path.join(input_folder, "converted_for_linux")
         success_count, error_count, errors = fix_playlists_batch(
-            input_folder, output_folder, windows_prefix, linux_prefix
+            input_folder, output_folder, windows_prefix, linux_prefix, strip_itunes
         )
 
         # Display summary
         print_summary(success_count, error_count, errors, output_folder)
 
-        # Step 6: Optional network share copy
+        # Step 7: Optional network share copy
         if success_count > 0:
             network_path = get_network_destination()
             if network_path:
